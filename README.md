@@ -1,22 +1,45 @@
 # Central Superstore – SQL Data Warehouse & Sales Analytics
 
-An end-to-end analytics project built on the **Central Superstore** retail dataset: raw CSV → layered SQL Server data warehouse (medallion architecture) → star schema → business queries, KPI view/stored procedure → **Tableau dashboards**.
+![SQL Server](https://img.shields.io/badge/SQL%20Server-T--SQL-CC2927?logo=microsoftsqlserver&logoColor=white)
+![Tableau](https://img.shields.io/badge/Tableau-Dashboards-E97627?logo=tableau&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-Medallion%20%2B%20Star%20Schema-1F3864)
 
-![Dashboard preview](docs/images/dashboard_preview.png)
-<!-- Replace with your best dashboard screenshot -->
+An end-to-end analytics project: a raw retail CSV is loaded into a **layered SQL Server data warehouse** (staging → bronze → silver → gold), modeled as a **star schema**, analyzed with advanced T-SQL, and presented through **four interactive Tableau dashboards** and a Tableau Story.
+
+**▶ [Explore the live dashboards on Tableau Public](https://public.tableau.com/app/profile/kirollos.gadallah/viz/CentralRetailDataset/ProductCategoryProfitability)**
+
+![Sales & Profit Overview dashboard](docs/images/01_sales_profit_overview.png)
 
 ---
 
-## Key Business Findings
+## Team
 
-| Area | Finding |
+| Member | Contribution |
 |---|---|
-| **Profitability** | Furniture is the only category losing money (**-1.77% margin**, -$2,894.75) even though its sales ($163.8K) are close to Technology's ($170.4K). Technology has the best margin (**16.85%**). |
-| **Profitability** | **722 line items** were sold at a loss, concentrated in copier / binding-equipment products – the same products that rank among the top sellers. First Class shipping carries the highest average discount (**26.6%**), a likely driver. |
-| **Customer behavior** | The top customer (Tamara Chand, $18.4K) generates ~50% more revenue than the #2 customer. Consumers buy mostly Office Supplies; Corporate and Home Office buy mostly Technology. |
-| **Sales trends** | Monthly sales are highly volatile, with a recurring peak in September (e.g., Sep 2013: $34.4K). |
+| **[Kirollos Gadallah](https://github.com/kirogadallah)** | SQL data warehouse (all four layers, star schema, queries, view, stored procedure), *Sales & Profit Overview* dashboard, Tableau Story |
+| **Mariam Emad** | *Product & Category Profitability* dashboard |
+| **Laila Elsisi** | *Discounting & Margin Impact* dashboard |
+| **Basmala Esam** | *Customer & Fulfillment Insights* dashboard |
 
-Full analysis and every query result: [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md).
+Each team member first built an individual data warehouse; this repository contains Kirollos's implementation, which the shared Tableau workbook is connected to.
+
+> Developed under the supervision of **Eng. Waleed Mohamed** as part of the **Digital Egypt Pioneers Initiative (DEPI)**.
+
+---
+
+## Key Insights
+
+| Area | Insight |
+|---|---|
+| **Profitability** | Furniture is the only loss-making category (**−$2.9K, −1.77% margin**) despite $163.8K in sales. Technology earns the best margin (**16.85%**); Office Supplies earns 5.15%. |
+| **Product mix** | 7 of 17 sub-categories lose money. **Copiers** lead profit ($15.5K); **Furnishings, Tables and Appliances** are the biggest drains (−$3.8K, −$3.0K, −$2.6K). |
+| **Discounting** | Profit peaks at **$71.6K with no discount** and turns negative at roughly a 30% discount. The five most-discounted sub-categories (Binders 51%, Appliances 45%, Furnishings 40%, Machines 33%, Tables 26%) are all unprofitable. |
+| **Loss-making orders** | **722 order lines** were sold at a loss. First Class shipments carry the highest average discount (**26.6%**). |
+| **Year-over-year (2016)** | Sales were flat vs 2015 (−0.22%) but profit fell **74.5%** to about $5K. |
+| **Customers** | Average order value is similar across segments ($409–$454), but profit per customer is **$16.7 for Consumers** vs **$92.7–$98.6 for Home Office and Corporate**. |
+| **Fulfillment** | Average shipping time: Standard 5.0 days, Second Class 3.4, First Class 2.2, Same Day ~0. |
+
+Detailed analysis, with the queries behind each finding: [`docs/PROJECT_DOCUMENTATION.md`](docs/PROJECT_DOCUMENTATION.md).
 
 ---
 
@@ -26,16 +49,16 @@ Full analysis and every query result: [`docs/PROJECT_DOCUMENTATION.md`](docs/PRO
 Central_Superstore.csv
         │  BULK INSERT
         ▼
-   staging   – raw text, loaded as-is
-        │  append new rows only (EXCEPT)
+  staging   raw text, loaded as-is
+        │  append only new rows (EXCEPT)
         ▼
-   bronze    – raw history + identity key
-        │  trim, type-cast, deduplicate, MERGE, quality flags
+  bronze    raw history + identity key
+        │  trim · type-cast · deduplicate · MERGE · data-quality flags
         ▼
-   silver    – clean, typed, one row per RowID
+  silver    clean, typed, one row per RowID
         │  dimensional modeling
         ▼
-   gold      – star schema → queries, KPI view, stored procedure → Tableau
+  gold      star schema ─► business queries · KPI view · stored procedure ─► Tableau
 ```
 
 ### Gold layer – star schema
@@ -84,12 +107,10 @@ erDiagram
         int date_key PK
         date OrderDate
         date ShipDate
-        int OrderYear
-        int ShipYear
     }
 ```
 
-`dim_date` stores **both the order date and the ship date in one row** (one row per distinct order/ship date pair), so `fact_sales` needs only a single `date_key`. Month, quarter, weekday, etc. attributes exist for both dates (the diagram shows only a subset).
+`dim_date` holds **both the order date and the ship date in a single row** (one row per distinct order/ship date pair), so `fact_sales` needs only one `date_key`. Day, month, quarter, year and weekday attributes exist for both dates; the diagram shows only a subset.
 
 ---
 
@@ -97,14 +118,47 @@ erDiagram
 
 | Component | Details |
 |---|---|
-| **ETL** | Staging → Bronze → Silver using CTEs, `MERGE`, `TRY_CAST`, `ROW_NUMBER` deduplication |
-| **Data-quality flags** | `has_missing_value`, `has_invalid_value`, `has_outlier_value` (IQR method) via `CASE` |
-| **Star schema** | 1 fact + 4 dimensions with enforced primary/foreign keys |
-| **15 business queries** | JOINs, subqueries (incl. correlated), CTEs, window functions (`LAG`, `RANK`, `ROW_NUMBER`) |
+| **ETL** | Staging → Bronze → Silver using CTEs, `MERGE`, `TRY_CAST`, and `ROW_NUMBER` de-duplication |
+| **Data quality** | `has_missing_value`, `has_invalid_value`, `has_outlier_value` (IQR method) flags built with `CASE` |
+| **Star schema** | 1 fact table + 4 dimensions with enforced primary and foreign keys |
+| **Business queries** | 15 queries using JOINs, subqueries (including correlated), CTEs and window functions (`LAG`, `RANK`, `ROW_NUMBER`) |
 | **View** | `gold.category_kpi` – sales, profit, quantity and margin % per category |
 | **Stored procedure** | `gold.usp_get_region_kpi @Region` – KPI summary for one or all regions |
-| **Indexes** | 5 non-clustered indexes on the fact table's join columns, created after load |
-| **Dashboards** | Tableau workbook + screenshots (see below) |
+| **Optimization** | 5 non-clustered indexes on the fact table's join columns, created after the load |
+| **Dashboards** | 4 Tableau dashboards + Story, with year comparison, filters and navigation |
+
+---
+
+## Dashboards
+
+The workbook is built on the gold layer and includes a **Select Year** parameter (2013–2016) that drives every current-year vs previous-year comparison, plus a collapsible filter panel (Segment, Ship Mode, Category, Sub-Category, State, City).
+
+### 1. Sales & Profit Overview — *Kirollos Gadallah*
+KPI cards with year-over-year change, weekly sales and profit trends, performance by category, and a profitability map by state.
+
+![Sales & Profit Overview](docs/images/01_sales_profit_overview.png)
+
+### 2. Product & Category Profitability — *Mariam Emad*
+Profit by sub-category, top 10 most profitable products, monthly profit-margin trend by category, and a sales treemap by sub-category.
+
+![Product & Category Profitability](docs/images/02_product_category_profitability.png)
+
+### 3. Discounting & Margin Impact — *Laila Elsisi*
+How discount depth affects profit, average discount by sub-category, margin with vs without discount by state, and the biggest loss-making order lines.
+
+![Discounting & Margin Impact](docs/images/03_discounting_margin_impact.png)
+
+### 4. Customer & Fulfillment Insights — *Basmala Esam*
+Top 10 customers, segment performance (average order value, orders per customer, profit per customer), shipping time and order volume by ship mode, and customer geography.
+
+![Customer & Fulfillment Insights](docs/images/04_customer_fulfillment_insights.png)
+
+<details>
+<summary>Filter panel (Overview dashboard)</summary>
+
+![Overview with filters](docs/images/05_overview_with_filters.png)
+
+</details>
 
 ---
 
@@ -113,65 +167,45 @@ erDiagram
 ```
 .
 ├── README.md
-├── sql/
-│   └── retail_final.sql              # full pipeline: schemas, ETL, star schema, queries, view, procedure
+├── SQL/
+│   └── retail.sql                    # full pipeline: ETL, star schema, 15 queries, view, procedure
+├── Tableau/
+│   └── Mini Project Tableau.twbx     # packaged workbook (dashboards + story + data extract)
 ├── data/
 │   └── Central_Superstore.csv        # source dataset
-├── tableau/
-│   └── Central_Superstore_Dashboards.twbx
 └── docs/
-    ├── PROJECT_DOCUMENTATION.md      # detailed walkthrough of everything built
-    └── images/                       # dashboard screenshots, diagrams
+    ├── PROJECT_DOCUMENTATION.md      # detailed walkthrough of the whole project
+    └── images/                       # dashboard screenshots
 ```
 
 ---
 
 ## How to Run
 
-**Requirements:** SQL Server (Express is enough) and a client such as SSMS, Azure Data Studio, or VS Code with the MSSQL extension.
+**Requirements:** SQL Server (Express edition is enough), a SQL client (SSMS, Azure Data Studio, or VS Code with the MSSQL extension), and Tableau Desktop to edit the workbook.
 
 1. Clone the repository.
-2. Open `sql/retail_final.sql` and update the `BULK INSERT` path to where `Central_Superstore.csv` is on your machine:
-   ```sql
-   FROM 'C:\path\to\Central_Superstore.csv'
-   ```
-3. Run the script from top to bottom. It creates the `central_dw` database, the four layers, and all gold objects.
+2. Open `SQL/retail.sql` and update the `BULK INSERT` path to the location of `Central_Superstore.csv` on your machine.
+3. Run the script from top to bottom. It creates the `central_dw` database, the four layers, and all gold-layer objects.
 4. Try the KPI objects:
    ```sql
    SELECT * FROM gold.category_kpi;
 
    EXEC gold.usp_get_region_kpi;                      -- all regions
-   EXEC gold.usp_get_region_kpi @Region = 'Central';  -- one region
+   EXEC gold.usp_get_region_kpi @Region = 'Central';  -- a single region
    ```
-5. The 15 business queries are in the *"15 Query"* section of the script; run them one at a time.
-
----
-
-## Dashboards (Tableau)
-
-Workbook: [`tableau/Central_Superstore_Dashboards.twbx`](tableau/Central_Superstore_Dashboards.twbx)
-
-<!-- Add one screenshot + one-line caption per dashboard -->
-
-![Dashboard 1](docs/images/dashboard_1.png)
-*Caption: what this dashboard shows.*
-
-![Dashboard 2](docs/images/dashboard_2.png)
-*Caption: what this dashboard shows.*
+5. Open `Tableau/Mini Project Tableau.twbx`. It ships with a data extract and opens offline. To refresh it, connect to server `localhost\SQLEXPRESS`, database `central_dw`, schema `gold`.
 
 ---
 
 ## Limitations
 
-- The dataset contains the **Central region only**, so cross-region comparisons (and query Q11, "customers who never ordered in the West") are not meaningful until the East/South/West files are loaded.
-- Outliers are **flagged**, not removed, so analysts can decide how to treat them.
+- The dataset covers the **Central region only**, so cross-region comparisons are not possible until the other regional files are loaded.
+- Outliers are **flagged, not removed**, leaving the treatment decision to the analyst.
+- The `BULK INSERT` path in the SQL script is machine-specific and must be edited before running.
+
+---
 
 ## Tech Stack
 
-SQL Server (T-SQL) · Tableau · Git
-
-## Author
-
-*Kirollos Gadallah* – (www.linkedin.com/in/kirollos-gadallah-ab5748348
-
-) · [[GitHub](https://github.com/kirogadallah)]
+SQL Server (T-SQL) · Tableau · Git & GitHub
