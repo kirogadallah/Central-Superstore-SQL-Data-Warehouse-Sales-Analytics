@@ -8,7 +8,7 @@ An end-to-end analytics project: a raw retail CSV is loaded into a **layered SQL
 
 **▶ [Explore the live dashboards on Tableau Public](https://public.tableau.com/app/profile/kirollos.gadallah/viz/CentralRetailDataset/ProductCategoryProfitability)**
 
-![Sales & Profit Overview dashboard](docs/images/01_sales_profit_overview.png)
+![Sales & Profit Overview dashboard](docs/images/Screenshot 2026-10-20 203708.png)
 
 ---
 
